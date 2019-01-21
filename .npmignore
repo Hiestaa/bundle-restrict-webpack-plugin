@@ -1,6 +1,7 @@
 /src
 /test
 /testFixtures
+/lib
 
 # Build generated
 .package.json.installed
