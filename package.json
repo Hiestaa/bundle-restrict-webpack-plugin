@@ -1,0 +1,44 @@
+{
+    "name": "@benbria/loop-common",
+    "version": "0.0.0-semantic-release",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/benbria/loop-common.git"
+    },
+    "main": "/lib",
+    "types": "/lib",
+    "dependencies": {},
+    "devDependencies": {
+        "@types/node": "^8.10.36",
+        "husky": "^1.1.2",
+        "lint-staged": "^7.3.0",
+        "mocha": "^5.2.0",
+        "sinon": "^7.0.0",
+        "tslint": "^5.11.0",
+        "typescript": "^3.1.3"
+    },
+    "scripts": {
+        "build": "tsc --pretty false && cp lib/bundle-restrict.js ./index.js && cp lib/bundle-restrict.d.ts ./index.d.ts",
+        "prepare": "npm run build",
+        "test": "npm run test:lint && npm run test:unittests",
+        "test:lint": "npm run test:lint:ts && npm run test:lint:ts-test'",
+        "test:lint:ts": "tslint -c tslint.json -t stylish 'src/**/*.ts'",
+        "test:lint:ts-test": "tslint -c tslint.json -t stylish 'test/**/*.ts'",
+        "test:unittests": "HIDE_LOOP_LOGS=true NODE_ENV=test mocha \"./test/**/*.@(coffee|js|ts)\"",
+        "clean": "rm -rf lib build node_modules npm-debug.log"
+    },
+    "husky": {
+        "hooks": {
+            "pre-commit": "lint-staged"
+        }
+    },
+    "lint-staged": {
+        "src/**/*.ts": [
+            "tslint -c tslint.json -t stylish"
+        ],
+        "test/**/*.ts": [
+            "tslint -c tslint.json -t stylish"
+        ]
+    },
+    "license": "MIT"
+}

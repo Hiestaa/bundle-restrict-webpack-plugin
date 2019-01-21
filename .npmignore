@@ -1,0 +1,9 @@
+/src
+/test
+/testFixtures
+
+# Build generated
+.package.json.installed
+/npm-debug.log
+/coverage
+/.nyc_output
