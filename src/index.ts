@@ -22,21 +22,21 @@ class Logger {
         this.level = level || 'info';
     }
 
-    _log(msg:string, lvl?: string) {
+    _log(msg: string, lvl?: string) {
         console.log(`[${PLUGIN_NAME}]${lvl ? `${lvl}: ` : ''}${msg}`);  // tslint:disable-line:no-console
     }
 
-    debug(msg:string) {
+    debug(msg: string) {
         if (this.level !== 'debug') { return; }
         this._log(msg, 'Debug');
     }
 
-    info(msg:string) {
+    info(msg: string) {
         if (this.level !== 'debug' && this.level !== 'info') { return; }
         this._log(msg);
     }
 
-    error(msg:string) {
+    error(msg: string) {
         this._log(msg, 'Error');
     }
 }
@@ -48,8 +48,9 @@ class ImportTreePrinter {
     _lastNodeAtDepth: {
         [key: number]: TreeNode;
     };
+    logger: Logger;
 
-    constructor(root: string, indent: number) {
+    constructor(root: string, indent: number, logger: Logger) {
         this.root = {
             children: [],
             parent: null,
@@ -60,6 +61,7 @@ class ImportTreePrinter {
         this.curPointer = this.root;
         this.indent = indent;
         this._lastNodeAtDepth = {};
+        this.logger = logger;
     }
 
     /**
@@ -129,33 +131,31 @@ class ImportTreePrinter {
         return !node.parent || node.width === node.parent.children.length - 1;
     }
 
-    _pp(logger: Logger, node: TreeNode) {
+    _pp(node: TreeNode) {
         this._lastNodeAtDepth[node.depth] = node;
         let prefix = '';
         // note: root node has a depth or -1
-        for (let i = -1; i < node.depth; i++) {
+        for (let i = 0; i < node.depth; i++) {
             prefix += (this._isLastChild(this._lastNodeAtDepth[i]) ? ' ' : '│') + ' '.repeat(this.indent);
         }
-        if (!node.parent) {
-            prefix += '─' + '─'.repeat(this.indent);
-        } else {
+        if (node.parent) {
             prefix += (this._isLastChild(node) ? '╰' : '├') + '─'.repeat(this.indent);
         }
-        logger.info(
+        this.logger.info(
             `${prefix}` +
             `${this._isLeaf(node) ? '─' : '┬'}${this.indent > -1 ? '─' : ''} ` +
             `${node.content}`
         );
         for (const child of node.children) {
-            this._pp(logger, child);
+            this._pp(child);
         }
     }
     /**
      * Pretty Print the tree built so far
      * @param indent Indentation size
      */
-    prettyPrint(logger: Logger) {
-        this._pp(logger, this.root);
+    prettyPrint() {
+        this._pp(this.root);
     }
 }
 
@@ -182,7 +182,7 @@ class ReasonsTraversal {
     maxStackDepth: number;
     maxStackWidth: number;
     breadthFirstEncounters: {
-        [key: string]: {width: number, depth: number}
+        [key: string]: { width: number, depth: number }
     };
     depthFirstEncounters: Set<string>;
     logger: Logger;
@@ -253,7 +253,7 @@ class ReasonsTraversal {
                     continue;
                 }
 
-                cb({reason, depth, width});
+                cb({ reason, depth, width });
                 this.depthFirstEncounters.add(reason.module.userRequest);
                 this.logger.debug(`[DFT] ${' '.repeat(depth)}Recurse for: ` + reason.module.userRequest);  // tslint:disable-line
                 this._depthFirst(reason.module, cb, depth + 1);
@@ -281,7 +281,7 @@ class ReasonsTraversal {
         // Instead, first go through a breadth-first traversal within the specified limit to see which files are
         // gonna be seen first and at which depth, then during the depth ignore the files whenever we're
         // deeper than the depth we were the first time we encountered it in breadth first traversal.
-        this._breadthFirst(this.mod, ({reason, depth, width}) => {
+        this._breadthFirst(this.mod, ({ reason, depth, width }) => {
             if (!this.breadthFirstEncounters[reason.module.userRequest]) {
                 this.breadthFirstEncounters[reason.module.userRequest] = {
                     depth,
@@ -373,24 +373,24 @@ export default class BundleRestrictPlugin {
             this.opts.maxStackDepth,
             this.opts.maxStackWidth,
             logger);
-        const importTrace = new ImportTreePrinter(text, this.opts.indent);
+        const importTrace = new ImportTreePrinter(text, this.opts.indent, logger);
 
-        traversal.traverse(({reason, depth}) => {
+        traversal.traverse(({ reason, depth }) => {
             const file = reason.module.userRequest.replace(this._prefix, '.');
             importTrace.addNodeIncrementally(`from: ${file}`, depth);
         });
 
-        importTrace.prettyPrint(logger);
+        importTrace.prettyPrint();
     }
 
-    _printOffenseDetails(offenders: {[key: string]: Module}, logger: Logger) {
+    _printOffenseDetails(offenders: { [key: string]: Module }, logger: Logger) {
 
         for (const key in offenders) {
             if (offenders.hasOwnProperty(key)) {
                 const mod = offenders[key];
                 this._printReasons(
                     mod,
-                    `[${PLUGIN_NAME}] Error: Restricted module \`${key}' ` +
+                    `Error: Restricted module \`${key}' ` +
                     `found in bundle \`${this.opts.chunk}'`, logger);
             }
         }
@@ -406,9 +406,9 @@ export default class BundleRestrictPlugin {
             );
 
             const chunks = stats.compilation.chunks;
-            const chunk = chunks.find((chunk:Chunk) =>
-                    chunk.name === this.opts.chunk ||
-                    chunk.files.indexOf(this.opts.chunk) >= 0
+            const chunk = chunks.find((chunk: Chunk) =>
+                chunk.name === this.opts.chunk ||
+                chunk.files.indexOf(this.opts.chunk) >= 0
             );
             const offenders: {
                 [key: string]: Module

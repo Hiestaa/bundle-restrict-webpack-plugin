@@ -3,13 +3,13 @@
         // Target latest version of ECMAScript.  Babel will take care of
         // compiling down when required.
         "target": "esnext",
-        "module": "commonjs",
+        "module": "CommonJS",
         // Search under node_modules for non-relative imports.
         "moduleResolution": "node",
         // Process & infer types from .js files.
         "allowJs": false,
         "declaration": true,
-        "outDir": "./lib",
+        "outDir": "../lib",
         // Enable strictest settings like strictNullChecks & noImplicitAny.
         "strict": true,
         // Import non-ES modules as default imports.
@@ -17,6 +17,6 @@
         "esModuleInterop": true
     },
     "include": [
-        "./src/**/*"
+        "./**/*"
     ]
 }
