@@ -61,6 +61,5 @@ typings/
 .next
 
 # build products
-index.js
-index.d.ts
 lib/*
+tmp/*

@@ -16,14 +16,23 @@ type Level = 'debug' | 'info' | 'error';
 class Logger {
     start: number;
     level: Level;
+    silent: boolean;
+    output: string;
 
-    constructor(level?: Level) {
+    constructor(level?: Level, silent?: boolean) {
         this.start = Date.now();
         this.level = level || 'info';
+        this.silent = silent || false;
+        this.output = '';
     }
 
     _log(msg: string, lvl?: string) {
-        console.log(`[${PLUGIN_NAME}]${lvl ? `${lvl}: ` : ''}${msg}`);  // tslint:disable-line:no-console
+        const _msg = `[${PLUGIN_NAME}] ${lvl ? `${lvl}: ` : ''}${msg}`;
+        if (this.silent) {
+            this.output += _msg + "\n";
+        } else {
+            console.log(_msg);  // tslint:disable-line:no-console
+        }
     }
 
     debug(msg: string) {
@@ -328,6 +337,8 @@ export interface BundleRestrictPluginOptions {
     maxStackDepth?: number;
     maxStackWidth?: number;
     indent?: number;
+    capture?: boolean;
+    log?: 'info' | 'debug' | 'error';
 }
 
 const _default = (def: any, val?: any) => {
@@ -345,6 +356,10 @@ const _default = (def: any, val?: any) => {
  *      * `maxStackDepth`: Maximum depth of the printed import stack trace (default: 3)
  *      * `maxStackWidth`: Maximum width of the printed import stack trace (default: 3)
  *      * `indent`: size of each level of indent (default: 2)
+ *      * `capture`: capture the output rather than printing it.
+ *                   Captured output will be available after the plugin has been
+ *                   applied in the field `output`.
+ *      * `log`: 'info' | 'debug' | 'error'
  */
 export default class BundleRestrictPlugin {
     opts: {
@@ -353,8 +368,11 @@ export default class BundleRestrictPlugin {
         maxStackDepth: number;
         maxStackWidth: number;
         indent: number;
+        capture: boolean;
+        log: 'info' | 'debug' | 'error';
     };
     _prefix: string;
+    logger: Logger;
 
     constructor(opts: BundleRestrictPluginOptions) {
         this.opts = {
@@ -363,17 +381,20 @@ export default class BundleRestrictPlugin {
             maxStackDepth: _default(MAX_STACK_DEPTH, opts.maxStackDepth),
             maxStackWidth: _default(MAX_STACK_WIDTH, opts.maxStackWidth),
             indent: _default(INDENT_SIZE, opts.indent),
+            capture: _default(false, opts.capture),
+            log: _default('info', opts.log)
         };
         this._prefix = process.cwd();
+        this.logger = new Logger(this.opts.log, this.opts.capture);
     }
 
-    _printReasons(mod: Module, text: string, logger: Logger) {
+    _printReasons(mod: Module, text: string) {
         const traversal = new ReasonsTraversal(
             mod,
             this.opts.maxStackDepth,
             this.opts.maxStackWidth,
-            logger);
-        const importTrace = new ImportTreePrinter(text, this.opts.indent, logger);
+            this.logger);
+        const importTrace = new ImportTreePrinter(text, this.opts.indent, this.logger);
 
         traversal.traverse(({ reason, depth }) => {
             const file = reason.module.userRequest.replace(this._prefix, '.');
@@ -383,7 +404,7 @@ export default class BundleRestrictPlugin {
         importTrace.prettyPrint();
     }
 
-    _printOffenseDetails(offenders: { [key: string]: Module }, logger: Logger) {
+    _printOffenseDetails(offenders: { [key: string]: Module }) {
 
         for (const key in offenders) {
             if (offenders.hasOwnProperty(key)) {
@@ -391,21 +412,21 @@ export default class BundleRestrictPlugin {
                 this._printReasons(
                     mod,
                     `Error: Restricted module \`${key}' ` +
-                    `found in bundle \`${this.opts.chunk}'`, logger);
+                    `found in bundle \`${this.opts.chunk}'`);
             }
         }
     }
 
     apply(compiler: Compiler) {
         const done = (stats: Stats) => {
-            const logger = new Logger();
-            logger.info(
-                `Asserting absence of modules \`${this.opts.modules.join(', ')}' ` +
+            this.logger = new Logger(this.opts.log, this.opts.capture);
+            this.logger.info(`Asserting absence of modules \`${this.opts.modules.join("', `")}' ` +
                 `in chunk: \`${this.opts.chunk}' (maxStackDepth=${this.opts.maxStackDepth}, ` +
-                `maxStackWidth=${this.opts.maxStackWidth})`
-            );
+                `maxStackWidth=${this.opts.maxStackWidth})`);
 
             const chunks = stats.compilation.chunks;
+            this.logger.debug('Processing chunks: ' + chunks.map(c => c.name));
+
             const chunk = chunks.find((chunk: Chunk) =>
                 chunk.name === this.opts.chunk ||
                 chunk.files.indexOf(this.opts.chunk) >= 0
@@ -425,21 +446,30 @@ export default class BundleRestrictPlugin {
             }
 
             if (Object.keys(offenders).length > 0) {
-                this._printOffenseDetails(offenders, logger);
+                this._printOffenseDetails(offenders);
                 // throws to halt the compilation with a non-0 exit code
                 const msg = (
-                    `Restricted module(s) \`${Object.keys(offenders).join("', `")} '` +
+                    `Restricted module(s) \`${Object.keys(offenders).join("', `")}' ` +
                     `present in main bundle chunk \`${this.opts.chunk}'.`);
-                logger.error(msg);
+                this.logger.error(msg);
                 throw new Error(msg);
             } else {
-                logger.info(
+                this.logger.info(
                     `Restricted module(s) \`${this.opts.modules.join("', `")}' ` +
                     `absent from bundle chunk \`${this.opts.chunk}' (${modCount} module processed).`
                 );
             }
+
         };
 
         compiler.hooks.done.tap(PLUGIN_NAME, done);
+    }
+
+    /**
+     * Get the output produced by the last execution of this plugin
+     * Only applies if the `capture` constructor option flag has been turned on.
+     */
+    getOutput():string {
+        return this.logger.output;
     }
 }
